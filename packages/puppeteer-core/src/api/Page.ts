@@ -47,6 +47,8 @@ import {
   type Handler,
 } from '../common/EventEmitter.js';
 import type {FileChooser} from '../common/FileChooser.js';
+import {NetworkRuleEngine} from '../common/NetworkRuleEngine.js';
+import type {NetworkRuleEngineOptions} from '../common/NetworkRules.js';
 import type {PDFOptions} from '../common/PDFOptions.js';
 import type {RemoteException} from '../common/RemoteException.js';
 import {TimeoutSettings} from '../common/TimeoutSettings.js';
@@ -1191,6 +1193,66 @@ export abstract class Page extends EventEmitter<PageEvents> {
    * @param value - Whether to enable request interception.
    */
   abstract setRequestInterception(value: boolean): Promise<void>;
+
+  /**
+   * Applies a set of declarative
+   * {@link NetworkRule | network rules} to all requests made by this page.
+   *
+   * @remarks
+   *
+   * Rules are evaluated in declaration order and the first matching rule
+   * wins. Supported actions are `block`, `allow`, `fulfill`, `record` and
+   * `retry` (see {@link NetworkRuleAction}). Matchers support URL, method,
+   * headers and resource type; `record`/`allow` rules may additionally match
+   * on the response status.
+   *
+   * Rule lookup is indexed and cached; it does not scan every rule for every
+   * request. Recorded bodies and authentication headers
+   * (`authorization`, `proxy-authorization`, `cookie`, `set-cookie`) are
+   * bounded/sanitized as described on {@link NetworkRuleEngineOptions}.
+   *
+   * If the engine itself fails while handling a request, the request is
+   * allowed to proceed and the failure is retained on the returned engine
+   * via {@link NetworkRuleEngine.getErrors}. Calling this method again (or
+   * with an empty rule list) detaches the previous engine; when no rules are
+   * configured the page's default, un-intercepted behavior is unchanged.
+   *
+   * @example
+   * Blocking all images:
+   *
+   * ```ts
+   * const engine = await page.setNetworkRules({
+   *   rules: [
+   *     {
+   *       name: 'block-images',
+   *       action: NetworkRuleAction.Block,
+   *       resourceType: 'image',
+   *     },
+   *   ],
+   * });
+   * console.log(engine.stats());
+   * ```
+   *
+   * @param options - The rules and buffering limits to apply. Pass
+   * `{rules: []}` to remove all rules.
+   */
+  async setNetworkRules(
+    options: NetworkRuleEngineOptions,
+  ): Promise<NetworkRuleEngine> {
+    if (this.#networkRuleEngine) {
+      const previous = this.#networkRuleEngine;
+      this.#networkRuleEngine = undefined;
+      await previous.detach();
+    }
+    const engine = new NetworkRuleEngine(options);
+    if (options.rules.length > 0) {
+      this.#networkRuleEngine = engine;
+      await engine.attach(this);
+    }
+    return engine;
+  }
+
+  #networkRuleEngine: NetworkRuleEngine | undefined;
 
   /**
    * Toggles ignoring of service worker for each request.

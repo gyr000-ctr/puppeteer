@@ -22,6 +22,8 @@ export * from './GetQueryHandler.js';
 export * from './HandleIterator.js';
 export * from './LazyArg.js';
 export * from './NetworkManagerEvents.js';
+export * from './NetworkRuleEngine.js';
+export * from './NetworkRules.js';
 export * from './PDFOptions.js';
 export * from './PierceQueryHandler.js';
 export * from './PQueryHandler.js';
